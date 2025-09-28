@@ -33,32 +33,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const subscriptionsRef = useRef<Set<string>>(new Set());
   const roomsRef = useRef<Set<string>>(new Set());
 
-  const handleMessage = (message: any) => {
-    switch (message.type) {
-      case 'connection':
-        console.log('WebSocket connection established:', message.clientId);
-        break;
-      case 'topic_update':
-        // Handle topic updates (train tracking, sensor data, etc.)
-        handleTopicUpdate(message.topic, message.data);
-        break;
-      case 'broadcast':
-        // Handle room broadcasts
-        handleRoomBroadcast(message.room, message.data);
-        break;
-      case 'system_broadcast':
-        // Handle system-wide broadcasts
-        handleSystemBroadcast(message.data);
-        break;
-      case 'error':
-        console.error('WebSocket error:', message.message);
-        toast.error(message.message);
-        break;
-      default:
-        console.log('Unknown message type:', message.type);
-    }
-  };
-
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
@@ -84,6 +58,44 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         });
         
         toast.success('Connected to ITMS server');
+      };
+
+      // Local helpers to avoid hook dependency warnings
+      const handleTopicUpdate = (topic: string, data: any) => {
+        const event = new CustomEvent(`ws-${topic}`, { detail: data });
+        window.dispatchEvent(event);
+      };
+
+      const handleRoomBroadcast = (room: string, data: any) => {
+        const event = new CustomEvent(`ws-room-${room}`, { detail: data });
+        window.dispatchEvent(event);
+      };
+
+      const handleSystemBroadcast = (data: any) => {
+        console.log('System broadcast:', data);
+      };
+
+      const handleMessage = (message: any) => {
+        switch (message.type) {
+          case 'connection':
+            console.log('WebSocket connection established:', message.clientId);
+            break;
+          case 'topic_update':
+            handleTopicUpdate(message.topic, message.data);
+            break;
+          case 'broadcast':
+            handleRoomBroadcast(message.room, message.data);
+            break;
+          case 'system_broadcast':
+            handleSystemBroadcast(message.data);
+            break;
+          case 'error':
+            console.error('WebSocket error:', message.message);
+            toast.error(message.message);
+            break;
+          default:
+            console.log('Unknown message type:', message.type);
+        }
       };
 
       wsRef.current.onmessage = (event) => {
@@ -120,25 +132,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       console.error('Failed to create WebSocket connection:', error);
       setConnectionStatus('error');
     }
-  }, [handleMessage]);
+  }, []);
 
 
-  const handleTopicUpdate = (topic: string, data: any) => {
-    // Dispatch custom events for different topics
-    const event = new CustomEvent(`ws-${topic}`, { detail: data });
-    window.dispatchEvent(event);
-  };
-
-  const handleRoomBroadcast = (room: string, data: any) => {
-    // Dispatch custom events for room broadcasts
-    const event = new CustomEvent(`ws-room-${room}`, { detail: data });
-    window.dispatchEvent(event);
-  };
-
-  const handleSystemBroadcast = (data: any) => {
-    // Handle system-wide broadcasts
-    console.log('System broadcast:', data);
-  };
 
   const sendMessage = (message: any) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
