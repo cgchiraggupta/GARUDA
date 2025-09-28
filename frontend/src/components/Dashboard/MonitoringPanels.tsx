@@ -1,8 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { 
-  Gauge, 
-  TrendingUp, 
   AlertTriangle, 
   Activity,
   MapPin,
@@ -13,13 +11,13 @@ import {
 import { useData } from '../../contexts/DataContext.tsx';
 
 const MonitoringPanels: React.FC = () => {
-  const { selectedRoute, trains, defects, alerts, sensorReadings } = useData();
+  const { trains, defects, alerts, sensorReadings } = useData();
 
   // Calculate track geometry parameters
   const getTrackGeometryData = () => {
     if (!sensorReadings.length) return null;
     
-    const latest = sensorReadings[0];
+    // Removed unused variable to satisfy ESLint
     return {
       gauge: 1676 + (Math.random() - 0.5) * 10, // Simulated gauge variation
       alignment: (Math.random() - 0.5) * 8, // Simulated alignment

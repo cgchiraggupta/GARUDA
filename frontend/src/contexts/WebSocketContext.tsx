@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
 interface WebSocketContextType {
@@ -33,7 +33,33 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const subscriptionsRef = useRef<Set<string>>(new Set());
   const roomsRef = useRef<Set<string>>(new Set());
 
-  const connect = () => {
+  const handleMessage = (message: any) => {
+    switch (message.type) {
+      case 'connection':
+        console.log('WebSocket connection established:', message.clientId);
+        break;
+      case 'topic_update':
+        // Handle topic updates (train tracking, sensor data, etc.)
+        handleTopicUpdate(message.topic, message.data);
+        break;
+      case 'broadcast':
+        // Handle room broadcasts
+        handleRoomBroadcast(message.room, message.data);
+        break;
+      case 'system_broadcast':
+        // Handle system-wide broadcasts
+        handleSystemBroadcast(message.data);
+        break;
+      case 'error':
+        console.error('WebSocket error:', message.message);
+        toast.error(message.message);
+        break;
+      default:
+        console.log('Unknown message type:', message.type);
+    }
+  };
+
+  const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -94,33 +120,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       console.error('Failed to create WebSocket connection:', error);
       setConnectionStatus('error');
     }
-  };
+  }, [handleMessage]);
 
-  const handleMessage = (message: any) => {
-    switch (message.type) {
-      case 'connection':
-        console.log('WebSocket connection established:', message.clientId);
-        break;
-      case 'topic_update':
-        // Handle topic updates (train tracking, sensor data, etc.)
-        handleTopicUpdate(message.topic, message.data);
-        break;
-      case 'broadcast':
-        // Handle room broadcasts
-        handleRoomBroadcast(message.room, message.data);
-        break;
-      case 'system_broadcast':
-        // Handle system-wide broadcasts
-        handleSystemBroadcast(message.data);
-        break;
-      case 'error':
-        console.error('WebSocket error:', message.message);
-        toast.error(message.message);
-        break;
-      default:
-        console.log('Unknown message type:', message.type);
-    }
-  };
 
   const handleTopicUpdate = (topic: string, data: any) => {
     // Dispatch custom events for different topics
@@ -167,6 +168,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     sendMessage({ type: 'leave_room', room });
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     connect();
 
@@ -178,7 +180,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         wsRef.current.close();
       }
     };
-  }, []);
+  }, [connect]);
 
   const value: WebSocketContextType = {
     isConnected,

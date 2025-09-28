@@ -5,10 +5,7 @@ import {
   Camera, 
   BarChart3, 
   Train, 
-  AlertTriangle, 
-  Settings,
-  ChevronLeft,
-  ChevronRight
+  AlertTriangle 
 } from 'lucide-react';
 import { useData } from '../../contexts/DataContext.tsx';
 
@@ -27,20 +24,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, activeView, onViewChange }
     { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   ];
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical': return 'text-danger-500';
-      case 'high': return 'text-danger-600';
-      case 'medium': return 'text-secondary-500';
-      case 'low': return 'text-success-500';
-      default: return 'text-gray-500';
-    }
-  };
-
-  const getSeverityCount = (severity: string) => {
-    return selectedRoute ? 
-      routes.find(r => r.id === selectedRoute.id)?.active_defects || 0 : 0;
-  };
+  // Removed unused helpers to satisfy ESLint in CI
 
   return (
     <motion.aside

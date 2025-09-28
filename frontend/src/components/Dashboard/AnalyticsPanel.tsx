@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { 
   BarChart, 
@@ -26,43 +26,11 @@ import {
   Activity
 } from 'lucide-react';
 import { useData } from '../../contexts/DataContext.tsx';
-import { apiService } from '../../services/api.ts';
 
 interface AnalyticsPanelProps {}
 
 const AnalyticsPanel: React.FC<AnalyticsPanelProps> = () => {
-  const { selectedRoute, defects, alerts } = useData();
-  const [analyticsData, setAnalyticsData] = useState<any>(null);
-  const [trendData, setTrendData] = useState<any[]>([]);
-  const [complianceData, setComplianceData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (selectedRoute) {
-      loadAnalyticsData();
-    }
-  }, [selectedRoute]);
-
-  const loadAnalyticsData = async () => {
-    if (!selectedRoute) return;
-    
-    setLoading(true);
-    try {
-      const [dashboard, trends, compliance] = await Promise.all([
-        apiService.getDashboardAnalytics({ route_id: selectedRoute.id }),
-        apiService.getTrendAnalysis({ route_id: selectedRoute.id, metric: 'defects', days: 30 }),
-        apiService.getComplianceReport({ route_id: selectedRoute.id })
-      ]);
-
-      setAnalyticsData(dashboard.data);
-      setTrendData(trends.data);
-      setComplianceData(compliance.data);
-    } catch (error) {
-      console.error('Error loading analytics data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { defects, alerts } = useData();
 
   // Defect severity distribution
   const defectSeverityData = [
@@ -127,18 +95,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = () => {
     </motion.div>
   );
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="card h-96 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading analytics...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Removed unused remote analytics loading to satisfy CI warnings
 
   return (
     <div className="space-y-6">

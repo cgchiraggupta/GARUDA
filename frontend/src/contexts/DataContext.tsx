@@ -124,24 +124,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     }
   }, [selectedRoute]);
 
-  const loadInitialData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      await loadRoutes();
-      
-      if (selectedRoute) {
-        await loadRouteData(selectedRoute.id);
-      }
-    } catch (err) {
-      console.error('Error loading initial data:', err);
-      setError('Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  }, [loadRoutes, selectedRoute]);
-
   const loadRouteData = useCallback(async (routeId: number) => {
     try {
       const [liveData, defectsData, alertsData] = await Promise.all([
@@ -160,6 +142,25 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError('Failed to load route data');
     }
   }, []);
+
+  const loadInitialData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      await loadRoutes();
+      
+      if (selectedRoute) {
+        await loadRouteData(selectedRoute.id);
+      }
+    } catch (err) {
+      console.error('Error loading initial data:', err);
+      setError('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, [loadRoutes, selectedRoute, loadRouteData]);
+
 
   const selectRoute = useCallback((route: Route) => {
     setSelectedRoute(route);

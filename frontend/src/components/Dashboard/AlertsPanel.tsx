@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Clock, MapPin, X } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useData } from '../../contexts/DataContext.tsx';
 
 const AlertsPanel: React.FC = () => {

@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import React, { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
-import { motion } from 'framer-motion';
-import { Train, AlertTriangle, MapPin, Clock } from 'lucide-react';
+import { Train, AlertTriangle, MapPin } from 'lucide-react';
 import { useData } from '../../contexts/DataContext.tsx';
 import 'leaflet/dist/leaflet.css';
 
@@ -88,25 +87,7 @@ const MapView: React.FC<MapViewProps> = () => {
     }
   };
 
-  const getDefectColor = (severity: string) => {
-    switch (severity) {
-      case 'critical': return '#DC2626';
-      case 'high': return '#EA580C';
-      case 'medium': return '#F59E0B';
-      case 'low': return '#059669';
-      default: return '#6B7280';
-    }
-  };
-
-  const getAlertColor = (severity: string) => {
-    switch (severity) {
-      case 'critical': return '#DC2626';
-      case 'error': return '#EA580C';
-      case 'warning': return '#F59E0B';
-      case 'info': return '#3B82F6';
-      default: return '#6B7280';
-    }
-  };
+  // Removed unused color helpers to satisfy ESLint in CI
 
   if (!selectedRoute) {
     return (

@@ -10,7 +10,6 @@ import {
   Pause, 
   Square,
   Download,
-  Settings,
   AlertTriangle,
   CheckCircle
 } from 'lucide-react';
