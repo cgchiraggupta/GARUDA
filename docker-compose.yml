@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:15
+    container_name: itms_postgres
+    environment:
+      POSTGRES_DB: itms_demo
+      POSTGRES_USER: railway_user
+      POSTGRES_PASSWORD: secure_password_2025
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - itms_network
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: itms_backend
+    ports:
+      - "8000:8000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://railway_user:secure_password_2025@database:5432/itms_demo
+      JWT_SECRET: itms_jwt_secret_2025
+    depends_on:
+      - database
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - itms_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: itms_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8000
+      REACT_APP_WS_URL: ws://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - itms_network
+
+volumes:
+  postgres_data:
+
+networks:
+  itms_network:
+    driver: bridge
