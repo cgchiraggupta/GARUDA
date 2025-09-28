@@ -58,75 +58,104 @@ const MapView: React.FC<MapViewProps> = () => {
   const [mapCenter, setMapCenter] = useState<[number, number]>([20.5937, 78.9629]); // India center
   const [mapZoom, setMapZoom] = useState(6);
 
-  // Load route geometry when route changes
+  // Fallback static geometry used when API is unavailable or empty
+  const fallbackGeometry: Record<number, [number, number][]> = {
+    1: [
+      [28.6139, 77.2090], [27.4924, 77.6737], [27.1767, 78.0081],
+      [25.4484, 78.5685], [23.2599, 77.4126], [22.3072, 73.1812],
+      [19.0760, 72.8777]
+    ],
+    2: [
+      [13.0827, 80.2707], [12.9716, 79.1596], [12.5657, 78.5742],
+      [12.9716, 77.5946]
+    ],
+    3: [
+      [22.5851, 88.3468], [23.7957, 86.4304], [24.7969, 85.0009],
+      [26.4499, 80.3319], [28.6139, 77.2090]
+    ],
+  };
+
+  // Load route geometry when route changes, with graceful fallback
   useEffect(() => {
     if (selectedRoute) {
       loadRouteGeometry(selectedRoute.id);
+    } else {
+      // No route selected — show India view
+      setRouteGeometry([]);
+      setMapCenter([20.5937, 78.9629]);
+      setMapZoom(6);
     }
   }, [selectedRoute]);
 
   const loadRouteGeometry = async (routeId: number) => {
     try {
       const response = await fetch(`http://localhost:8000/api/v1/routes/${routeId}/geometry?limit=1000`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      
-      if (data.success && data.data.length > 0) {
-        const geometry = data.data.map((point: any) => [point.latitude, point.longitude] as [number, number]);
-        setRouteGeometry(geometry);
-        
-        // Set map center to route center
-        if (geometry.length > 0) {
-          const centerLat = geometry.reduce((sum: number, point: [number, number]) => sum + point[0], 0) / geometry.length;
-          const centerLng = geometry.reduce((sum: number, point: [number, number]) => sum + point[1], 0) / geometry.length;
-          setMapCenter([centerLat, centerLng]);
-          setMapZoom(8);
-        }
+
+      let geometry: [number, number][] = [];
+      if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
+        geometry = data.data.map((point: any) => [point.latitude, point.longitude] as [number, number]);
+      } else if (fallbackGeometry[routeId]) {
+        geometry = fallbackGeometry[routeId];
+      }
+
+      setRouteGeometry(geometry);
+
+      if (geometry.length > 0) {
+        const centerLat = geometry.reduce((sum: number, point: [number, number]) => sum + point[0], 0) / geometry.length;
+        const centerLng = geometry.reduce((sum: number, point: [number, number]) => sum + point[1], 0) / geometry.length;
+        setMapCenter([centerLat, centerLng]);
+        setMapZoom(8);
+      } else {
+        setMapCenter([20.5937, 78.9629]);
+        setMapZoom(6);
       }
     } catch (error) {
-      console.error('Error loading route geometry:', error);
+      // API failed — use fallback geometry if available
+      const geometry = fallbackGeometry[routeId] || [];
+      setRouteGeometry(geometry);
+      if (geometry.length > 0) {
+        const centerLat = geometry.reduce((sum: number, point: [number, number]) => sum + point[0], 0) / geometry.length;
+        const centerLng = geometry.reduce((sum: number, point: [number, number]) => sum + point[1], 0) / geometry.length;
+        setMapCenter([centerLat, centerLng]);
+        setMapZoom(8);
+      } else {
+        setMapCenter([20.5937, 78.9629]);
+        setMapZoom(6);
+      }
     }
   };
 
   // Removed unused color helpers to satisfy ESLint in CI
 
-  if (!selectedRoute) {
-    return (
-      <div className="card h-96 flex items-center justify-center">
-        <div className="text-center">
-          <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">Select a route to view the map</p>
-        </div>
-      </div>
-    );
-  }
+  // Always render the map. When no route is selected, show base map; when selected, show route.
 
   return (
     <div className="card h-96 overflow-hidden">
       <div className="card-header">
         <h3 className="text-lg font-semibold text-gray-900">Live Track Monitoring</h3>
-        <p className="text-sm text-gray-600">{selectedRoute.name}</p>
+        <p className="text-sm text-gray-600">{selectedRoute?.name || 'All Routes'}</p>
       </div>
       <div className="card-content p-0 h-80">
         <MapContainer
           center={mapCenter}
           zoom={mapZoom}
           style={{ height: '100%', width: '100%' }}
-          key={`${selectedRoute.id}-${mapCenter[0]}-${mapCenter[1]}`}
+          key={`${(selectedRoute?.id ?? 'all')}-${mapCenter[0]}-${mapCenter[1]}`}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           
-          {/* Route Line */}
+          {/* Route Line or All Routes when none selected */}
           {routeGeometry.length > 0 && (
-            <Polyline
-              positions={routeGeometry}
-              color="#1E40AF"
-              weight={4}
-              opacity={0.8}
-            />
+            <Polyline positions={routeGeometry} color="#1E40AF" weight={4} opacity={0.8} />
           )}
+          {(!selectedRoute) && Object.entries(fallbackGeometry).map(([routeId, geometry]) => (
+            <Polyline key={routeId} positions={geometry} color="#6B7280" weight={2} opacity={0.6} />
+          ))}
           
           {/* Train Markers */}
           {trains.map((train) => (

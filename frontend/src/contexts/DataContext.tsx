@@ -107,20 +107,23 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
   const { subscribe, unsubscribe, joinRoom, leaveRoom } = useWebSocket();
 
-  const loadRoutes = useCallback(async () => {
+  const loadRoutes = useCallback(async (): Promise<Route[]> => {
     try {
       const response = await apiService.getRoutes();
-      // Axios response body shape: { success: boolean, data: Route[], count: number }
-      // Ensure we set the actual array of routes
-      setRoutes(response.data?.data || []);
+      const list: Route[] = response.data?.data || [];
+      // Set routes immediately
+      setRoutes(list);
       
       // Select first route by default
-      if (response.data?.data?.length > 0 && !selectedRoute) {
-        setSelectedRoute(response.data.data[0]);
+      if (list.length > 0 && !selectedRoute) {
+        setSelectedRoute(list[0]);
       }
+      
+      return list;
     } catch (err) {
       console.error('Error loading routes:', err);
       setError('Failed to load routes');
+      return [];
     }
   }, [selectedRoute]);
 
@@ -148,10 +151,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     setError(null);
     
     try {
-      await loadRoutes();
-      
-      if (selectedRoute) {
-        await loadRouteData(selectedRoute.id);
+      const list = await loadRoutes();
+      const initial = list[0];
+      if (initial) {
+        await loadRouteData(initial.id);
+        // Join initial route room for real-time updates
+        joinRoom(`route_${initial.id}`);
       }
     } catch (err) {
       console.error('Error loading initial data:', err);
@@ -159,7 +164,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [loadRoutes, selectedRoute, loadRouteData]);
+  }, [loadRoutes, loadRouteData, joinRoom]);
 
 
   const selectRoute = useCallback((route: Route) => {
@@ -252,6 +257,13 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   useEffect(() => {
     loadInitialData();
   }, [loadInitialData]);
+
+  // Auto-load data whenever selectedRoute becomes available or changes
+  useEffect(() => {
+    if (selectedRoute) {
+      loadRouteData(selectedRoute.id);
+    }
+  }, [selectedRoute, loadRouteData]);
 
   const value: DataContextType = {
     routes,

@@ -68,8 +68,15 @@ const Header: React.FC<HeaderProps> = ({
             </button>
             
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">🚂</span>
+              <div className="w-8 h-8 rounded-lg overflow-hidden">
+                <img
+                  src="/brand-symbol.png"
+                  alt=""
+                  className="w-8 h-8 object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231F4B99'/><text x='32' y='36' text-anchor='middle' font-family='Arial' font-size='24' fill='white'>IT</text></svg>";
+                  }}
+                />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">ITMS</h1>

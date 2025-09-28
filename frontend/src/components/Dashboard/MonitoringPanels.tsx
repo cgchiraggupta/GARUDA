@@ -94,32 +94,39 @@ const MonitoringPanels: React.FC = () => {
           <div className="text-center">
             <h3 className="text-sm font-medium text-gray-600 mb-2">{title}</h3>
             <div className="relative w-24 h-24 mx-auto mb-2">
-              <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  stroke="#e5e7eb"
-                  strokeWidth="8"
-                  fill="none"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  stroke={isOptimal ? '#059669' : '#DC2626'}
-                  strokeWidth="8"
-                  fill="none"
-                  strokeDasharray={`${percentage * 2.51} 251`}
-                  strokeLinecap="round"
-                  className="transition-all duration-500"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className={`text-lg font-bold ${isOptimal ? 'text-success-600' : 'text-danger-600'}`}>
+              <svg className="w-24 h-24" viewBox="0 0 100 100">
+                <g transform="rotate(-90 50 50)">
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    stroke="#e5e7eb"
+                    strokeWidth="8"
+                    fill="none"
+                  />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    stroke={isOptimal ? '#059669' : '#DC2626'}
+                    strokeWidth="8"
+                    fill="none"
+                    strokeDasharray={`${Math.max(0, Math.min(percentage, 100)) * 2.51} 251`}
+                    strokeLinecap="round"
+                    className="transition-all duration-500"
+                  />
+                </g>
+                <text
+                  x="50"
+                  y="50"
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill={isOptimal ? '#16a34a' : '#dc2626'}
+                  style={{ fontWeight: 700 }}
+                >
                   {value.toFixed(1)}
-                </span>
-              </div>
+                </text>
+              </svg>
             </div>
             <p className="text-xs text-gray-500">{unit}</p>
             <p className={`text-xs mt-1 ${isOptimal ? 'text-success-600' : 'text-danger-600'}`}>

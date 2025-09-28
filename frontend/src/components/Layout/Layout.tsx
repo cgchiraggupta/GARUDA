@@ -23,7 +23,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const { isConnected, connectionStatus } = useWebSocket();
-  const { selectedRoute, routes } = useData();
+  const { selectedRoute, routes, selectRoute } = useData();
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -66,7 +66,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl">
           <div className="flex h-16 items-center justify-between px-4">
             <div className="flex items-center">
-              <Train className="h-8 w-8 text-railway-blue" />
+              <div className="h-8 w-8 rounded-lg overflow-hidden">
+                <img
+                  src="/brand-symbol.png"
+                  alt=""
+                  className="h-8 w-8 object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231F4B99'/><text x='32' y='36' text-anchor='middle' font-family='Arial' font-size='24' fill='white'>IT</text></svg>";
+                  }}
+                />
+              </div>
               <span className="ml-2 text-xl font-bold text-gray-900">ITMS</span>
             </div>
             <button
@@ -103,8 +112,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
           {/* Logo */}
-          <div className="flex h-16 items-center px-4 border-b border-gray-200">
-            <Train className="h-8 w-8 text-railway-blue" />
+            <div className="flex h-16 items-center px-4 border-b border-gray-200">
+            <div className="h-8 w-8 rounded-lg overflow-hidden">
+              <img
+                src="/brand-symbol.png"
+                alt=""
+                className="h-8 w-8 object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231F4B99'/><text x='32' y='36' text-anchor='middle' font-family='Arial' font-size='24' fill='white'>IT</text></svg>";
+                }}
+              />
+            </div>
             <span className="ml-2 text-xl font-bold text-gray-900">ITMS</span>
             <span className="ml-2 text-sm text-gray-500">Demo</span>
           </div>
@@ -140,7 +158,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               value={selectedRoute?.id || ''}
               onChange={(e) => {
                 const route = routes.find(r => r.id === parseInt(e.target.value));
-                // This will be handled by the DataContext
+                if (route) {
+                  selectRoute(route);
+                }
               }}
             >
               <option value="">All Routes</option>
