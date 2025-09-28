@@ -239,29 +239,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = () => {
         </div>
       </div>
 
-      {/* Compliance Report */}
-      {complianceData && (
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-lg font-semibold text-gray-900">EN 13848 Compliance Report</h3>
-          </div>
-          <div className="card-content">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {complianceData.standard_compliance?.map((standard: any, index: number) => (
-                <div key={index} className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-primary-600">
-                    {standard.compliance_percentage}%
-                  </div>
-                  <div className="text-sm text-gray-600">{standard.parameter}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {standard.compliant_points} / {standard.total_points} points
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Compliance Report section removed: no complianceData available */}
 
       {/* Predictive Maintenance */}
       <div className="card">
