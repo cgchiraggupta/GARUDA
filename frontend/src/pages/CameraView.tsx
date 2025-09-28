@@ -16,7 +16,7 @@ import {
 import { useData } from '../contexts/DataContext.tsx';
 
 const CameraView: React.FC = () => {
-  const { selectedRoute, trainPositions } = useData();
+  const { selectedRoute, trains } = useData();
   const webcamRef = useRef<Webcam>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isDetecting, setIsDetecting] = useState(true);
@@ -44,6 +44,22 @@ const CameraView: React.FC = () => {
     image: string; // base64 screenshot
   };
   const [detectionEvents, setDetectionEvents] = useState<DetectionEvent[]>([]);
+
+  // When live train data is available, reflect it in the camera overlay
+  React.useEffect(() => {
+    if (trains && trains.length > 0) {
+      const t = trains[0];
+      setOverlayData((prev) => ({
+        ...prev,
+        latitude: t.latitude,
+        longitude: t.longitude,
+        chainage: t.chainage,
+        speed: t.speed,
+        direction: t.direction,
+        timestamp: t.timestamp,
+      }));
+    }
+  }, [trains]);
 
   // Mock crack detection data
   const [crackDetections, setCrackDetections] = useState([

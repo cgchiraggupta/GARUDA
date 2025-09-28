@@ -32,6 +32,7 @@ const CameraPanel: React.FC<CameraPanelProps> = () => {
     confidence: number;
     severity: 'low' | 'medium' | 'high' | 'critical';
   }>>([]);
+  const lastCapturedIdRef = useRef<string | null>(null);
   // Post-processing to reduce gaps: dilate and merge nearby boxes
   type CrackDet = { id: string; x: number; y: number; width: number; height: number; confidence: number; severity: 'low' | 'medium' | 'high' | 'critical' };
   const processedDetections: CrackDet[] = useMemo(() => {
@@ -119,6 +120,46 @@ const CameraPanel: React.FC<CameraPanelProps> = () => {
       setCapturedImages(prev => [imageSrc, ...prev.slice(0, 9)]);
     }
   }, [webcamRef]);
+
+  // Persist captured image with metadata to localStorage
+  const saveCaptureWithMetadata = useCallback((image: string, detection: { id: string; confidence: number; severity: 'low' | 'medium' | 'high' | 'critical' }) => {
+    const payload = {
+      image,
+      timestamp: new Date().toISOString(),
+      route: selectedRoute ? { id: selectedRoute.id, name: selectedRoute.name } : null,
+      gps: gpsCoordinates ? { lat: gpsCoordinates.lat, lng: gpsCoordinates.lng, chainage: gpsCoordinates.chainage } : null,
+      detection: {
+        id: detection.id,
+        confidence: detection.confidence,
+        severity: detection.severity,
+      },
+    };
+
+    try {
+      const key = 'itms_captures';
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      const next = [payload, ...existing].slice(0, 50);
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch (e) {
+      console.warn('Failed to persist capture:', e);
+    }
+  }, [gpsCoordinates, selectedRoute]);
+
+  // Auto-capture when a new significant detection appears
+  useEffect(() => {
+    const d = crackDetections[0];
+    if (!d) return;
+    const significant = d.confidence >= 0.85 || d.severity === 'high' || d.severity === 'critical';
+    if (!significant) return;
+    if (lastCapturedIdRef.current === d.id) return;
+
+    const imageSrc = webcamRef.current?.getScreenshot();
+    if (imageSrc) {
+      setCapturedImages(prev => [imageSrc, ...prev.slice(0, 9)]);
+      saveCaptureWithMetadata(imageSrc, { id: d.id, confidence: d.confidence, severity: d.severity });
+      lastCapturedIdRef.current = d.id;
+    }
+  }, [crackDetections, saveCaptureWithMetadata]);
 
   const downloadImage = (imageSrc: string, index: number) => {
     const link = document.createElement('a');
