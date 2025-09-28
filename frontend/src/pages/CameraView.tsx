@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import Webcam from 'react-webcam';
 import { 
   Camera, 
@@ -40,6 +40,50 @@ const CameraView: React.FC = () => {
     { id: 2, x: 300, y: 150, width: 60, height: 15, confidence: 0.87, severity: 'medium' },
     { id: 3, x: 500, y: 300, width: 40, height: 10, confidence: 0.78, severity: 'low' }
   ]);
+
+  // Post-processing to reduce gaps: dilate and merge nearby boxes
+  type CrackDet = { id: number; x: number; y: number; width: number; height: number; confidence: number; severity: 'low' | 'medium' | 'high' | 'critical' };
+
+  const processedDetections: CrackDet[] = useMemo(() => {
+    const PAD = 12; // dilation in pixels
+    const GAP = 18; // max horizontal gap to merge contiguous boxes
+
+    const dilated = crackDetections.map((d) => ({
+      ...d,
+      x: Math.max(0, d.x - PAD),
+      y: Math.max(0, d.y - PAD),
+      width: d.width + PAD * 2,
+      height: d.height + PAD * 2,
+    }));
+
+    // Merge nearby horizontally-contiguous boxes with similar vertical position
+    const sorted = [...dilated].sort((a, b) => a.x - b.x);
+    const merged: CrackDet[] = [];
+    for (const d of sorted) {
+      const last = merged[merged.length - 1];
+      const lastRight = last ? last.x + last.width : 0;
+      const verticalOverlap = last && !(d.y > last.y + last.height || last.y > d.y + d.height);
+      if (last && verticalOverlap && d.x - lastRight <= GAP) {
+        const minX = Math.min(last.x, d.x);
+        const minY = Math.min(last.y, d.y);
+        const maxX = Math.max(last.x + last.width, d.x + d.width);
+        const maxY = Math.max(last.y + last.height, d.y + d.height);
+        merged[merged.length - 1] = {
+          ...last,
+          x: minX,
+          y: minY,
+          width: maxX - minX,
+          height: maxY - minY,
+          confidence: Math.max(last.confidence, d.confidence),
+          severity: last.severity, // keep higher-level style consistent
+        };
+      } else {
+        merged.push(d);
+      }
+    }
+
+    return merged;
+  }, [crackDetections]);
 
   const videoConstraints = {
     width: cameraSettings.width,
@@ -164,8 +208,8 @@ const CameraView: React.FC = () => {
               </div>
             </div>
 
-            {/* Crack Detection Overlays */}
-            {isDetecting && crackDetections.map((detection) => (
+            {/* Crack Detection Overlays (gap-filled / dilated) */}
+            {isDetecting && processedDetections.map((detection) => (
               <div
                 key={detection.id}
                 className={`absolute border-2 ${getSeverityColor(detection.severity)}`}

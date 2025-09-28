@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import Webcam from 'react-webcam';
 import { motion } from 'framer-motion';
 import { 
@@ -32,6 +32,48 @@ const CameraPanel: React.FC<CameraPanelProps> = () => {
     confidence: number;
     severity: 'low' | 'medium' | 'high' | 'critical';
   }>>([]);
+  // Post-processing to reduce gaps: dilate and merge nearby boxes
+  type CrackDet = { id: string; x: number; y: number; width: number; height: number; confidence: number; severity: 'low' | 'medium' | 'high' | 'critical' };
+  const processedDetections: CrackDet[] = useMemo(() => {
+    const PAD = 12; // dilation in pixels
+    const GAP = 18; // max horizontal gap to merge contiguous boxes
+
+    const dilated = crackDetections.map((d) => ({
+      ...d,
+      x: Math.max(0, d.x - PAD),
+      y: Math.max(0, d.y - PAD),
+      width: d.width + PAD * 2,
+      height: d.height + PAD * 2,
+    }));
+
+    // Merge nearby horizontally-contiguous boxes with similar vertical position
+    const sorted = [...dilated].sort((a, b) => a.x - b.x);
+    const merged: CrackDet[] = [];
+    for (const d of sorted) {
+      const last = merged[merged.length - 1];
+      const lastRight = last ? last.x + last.width : 0;
+      const verticalOverlap = last && !(d.y > last.y + last.height || last.y > d.y + d.height);
+      if (last && verticalOverlap && d.x - lastRight <= GAP) {
+        const minX = Math.min(last.x, d.x);
+        const minY = Math.min(last.y, d.y);
+        const maxX = Math.max(last.x + last.width, d.x + d.width);
+        const maxY = Math.max(last.y + last.height, d.y + d.height);
+        merged[merged.length - 1] = {
+          ...last,
+          x: minX,
+          y: minY,
+          width: maxX - minX,
+          height: maxY - minY,
+          confidence: Math.max(last.confidence, d.confidence),
+          severity: last.severity,
+        };
+      } else {
+        merged.push(d);
+      }
+    }
+
+    return merged;
+  }, [crackDetections]);
 
   // Simulate GPS coordinates based on current train position
   useEffect(() => {
@@ -160,7 +202,7 @@ const CameraPanel: React.FC<CameraPanelProps> = () => {
             </div>
 
             {/* Crack Detection Overlays */}
-            {crackDetections.map((detection) => (
+            {processedDetections.map((detection) => (
               <motion.div
                 key={detection.id}
                 initial={{ opacity: 0, scale: 0.8 }}
@@ -229,7 +271,7 @@ const CameraPanel: React.FC<CameraPanelProps> = () => {
           </div>
           <div className="card-content">
             <div className="space-y-3">
-              {crackDetections.map((detection) => (
+              {processedDetections.map((detection) => (
                 <motion.div
                   key={detection.id}
                   initial={{ opacity: 0, x: -20 }}
