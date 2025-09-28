@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { 
   Camera, 
@@ -33,6 +33,17 @@ const CameraView: React.FC = () => {
     direction: 'forward',
     timestamp: new Date().toISOString()
   });
+
+  // Captured events with geotagging when cracks are detected
+  type DetectionEvent = {
+    id: string;
+    timestamp: string;
+    latitude: number;
+    longitude: number;
+    count: number;
+    image: string; // base64 screenshot
+  };
+  const [detectionEvents, setDetectionEvents] = useState<DetectionEvent[]>([]);
 
   // Mock crack detection data
   const [crackDetections, setCrackDetections] = useState([
@@ -98,6 +109,51 @@ const CameraView: React.FC = () => {
       console.log('Screenshot captured:', imageSrc);
     }
   }, [webcamRef]);
+
+  // Continuously update GPS using browser geolocation API
+  useEffect(() => {
+    if (!('geolocation' in navigator)) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setOverlayData((prev) => ({
+          ...prev,
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          timestamp: new Date().toISOString(),
+        }));
+      },
+      (err) => console.warn('Geolocation error:', err),
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // Auto-capture frames and geotag whenever cracks are detected
+  useEffect(() => {
+    let interval: number | undefined;
+    if (isDetecting) {
+      interval = window.setInterval(() => {
+        const imageSrc = webcamRef.current?.getScreenshot();
+        if (!imageSrc) return;
+        // Use processedDetections as current detection result (placeholder for real model)
+        const count = processedDetections.length;
+        if (count > 0) {
+          const evt: DetectionEvent = {
+            id: `${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            latitude: overlayData.latitude,
+            longitude: overlayData.longitude,
+            count,
+            image: imageSrc,
+          };
+          setDetectionEvents((prev) => [evt, ...prev].slice(0, 50));
+        }
+      }, 1000); // capture every second without stopping camera
+    }
+    return () => {
+      if (interval) window.clearInterval(interval);
+    };
+  }, [isDetecting, processedDetections, overlayData.latitude, overlayData.longitude]);
 
   const startRecording = () => {
     setIsRecording(true);
@@ -320,6 +376,28 @@ const CameraView: React.FC = () => {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Auto-captured geotagged frames */}
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Captured Events (Geotagged)</h3>
+            {detectionEvents.length === 0 ? (
+              <p className="text-sm text-gray-600">No events captured yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {detectionEvents.map((evt) => (
+                  <div key={evt.id} className="flex items-start space-x-3">
+                    <img src={evt.image} alt="capture" className="w-20 h-14 object-cover rounded border" />
+                    <div className="text-xs text-gray-700">
+                      <div className="font-medium">{new Date(evt.timestamp).toLocaleTimeString()}</div>
+                      <div>Detections: {evt.count}</div>
+                      <div>Lat: {evt.latitude.toFixed(6)}</div>
+                      <div>Lng: {evt.longitude.toFixed(6)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Camera Settings */}

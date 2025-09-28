@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Dashboard from './components/Dashboard/Dashboard.tsx';
+import CameraView from './pages/CameraView.tsx';
 import { WebSocketProvider } from './contexts/WebSocketContext.tsx';
 import { DataProvider } from './contexts/DataContext.tsx';
 
@@ -14,6 +15,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/camera" element={<CameraView />} />
             </Routes>
             <Toaster
               position="top-right"
