@@ -86,6 +86,23 @@ const alerts = [
   }
 ];
 
+// Camera error tracking
+const cameraErrors = [
+  {
+    id: 1,
+    error_type: 'permission',
+    message: 'Camera permission denied',
+    route_id: 1,
+    chainage_km: 245.5,
+    latitude: 28.644800,
+    longitude: 77.216721,
+    severity: 'high',
+    status: 'resolved',
+    created_at: new Date(Date.now() - 300000).toISOString(), // 5 minutes ago
+    resolved_at: new Date(Date.now() - 240000).toISOString() // 4 minutes ago
+  }
+];
+
 // API Routes
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
@@ -124,25 +141,131 @@ app.get('/api/v1/defects/active', (req, res) => {
   res.json({ success: true, data: defects, count: defects.length });
 });
 
+// Endpoint to report new crack detections from camera
+app.post('/api/v1/defects', (req, res) => {
+  const { route_id, chainage_km, latitude, longitude, detections } = req.body;
+  
+  const newDefects = detections.map((detection, index) => ({
+    id: defects.length + index + 1,
+    route_id: route_id || 1,
+    chainage_km: chainage_km || 0,
+    defect_type: detection.defect_type || 'crack',
+    severity: detection.severity || 'medium',
+    description: detection.description || 'Crack detected by camera',
+    confidence_score: detection.confidence_score || 0.8,
+    repair_priority: detection.repair_priority || 3,
+    estimated_repair_cost: detection.estimated_repair_cost || 100000,
+    detected_at: new Date().toISOString(),
+    status: 'active',
+    latitude: latitude || 28.6139,
+    longitude: longitude || 77.2090
+  }));
+  
+  defects.push(...newDefects);
+  
+  // Broadcast new defects to WebSocket clients
+  newDefects.forEach(defect => {
+    const message = JSON.stringify({
+      type: 'defect_detection',
+      data: defect,
+      timestamp: new Date().toISOString()
+    });
+
+    clients.forEach(client => {
+      if (client.readyState === 1) {
+        client.send(message);
+      }
+    });
+  });
+  
+  res.json({ success: true, data: newDefects, count: newDefects.length });
+});
+
 app.get('/api/v1/alerts', (req, res) => {
   res.json({ success: true, data: alerts, count: alerts.length });
 });
 
+// Camera error endpoints
+app.get('/api/v1/camera-errors', (req, res) => {
+  res.json({ success: true, data: cameraErrors, count: cameraErrors.length });
+});
+
+app.post('/api/v1/camera-errors', (req, res) => {
+  const { error_type, message, route_id, chainage_km, latitude, longitude, severity } = req.body;
+  
+  const newError = {
+    id: cameraErrors.length + 1,
+    error_type,
+    message,
+    route_id: route_id || 1,
+    chainage_km: chainage_km || 0,
+    latitude: latitude || 28.6139,
+    longitude: longitude || 77.2090,
+    severity: severity || 'medium',
+    status: 'active',
+    created_at: new Date().toISOString(),
+    resolved_at: null
+  };
+  
+  cameraErrors.push(newError);
+  
+  // Broadcast error to WebSocket clients
+  const errorMessage = JSON.stringify({
+    type: 'camera_error',
+    data: newError,
+    timestamp: new Date().toISOString()
+  });
+
+  clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(errorMessage);
+    }
+  });
+  
+  res.json({ success: true, data: newError });
+});
+
 app.get('/api/v1/analytics/dashboard', (req, res) => {
+  const activeCameraErrors = cameraErrors.filter(e => e.status === 'active');
+  const recentCameraErrors = cameraErrors.filter(e => 
+    new Date(e.created_at) > new Date(Date.now() - 3600000) // Last hour
+  );
+  
   res.json({
     success: true,
     data: {
       system_stats: {
+        active_trains: trains.length,
         total_routes: routes.length,
         total_defects: defects.length,
         critical_defects: defects.filter(d => d.severity === 'critical').length,
         high_defects: defects.filter(d => d.severity === 'high').length,
         scheduled_maintenance: routes.reduce((sum, r) => sum + r.scheduled_maintenance, 0),
         active_alerts: alerts.filter(a => a.status === 'active').length,
-        total_track_length: routes.reduce((sum, r) => sum + r.distance_km, 0)
+        total_track_length: routes.reduce((sum, r) => sum + r.distance_km, 0),
+        camera_errors: activeCameraErrors.length,
+        recent_camera_errors: recentCameraErrors.length
       },
-      recent_activity: [],
-      performance_metrics: [],
+      recent_activity: [
+        ...recentCameraErrors.map(error => ({
+          type: 'camera_error',
+          message: `Camera ${error.error_type} error: ${error.message}`,
+          timestamp: error.created_at,
+          severity: error.severity
+        }))
+      ],
+      performance_metrics: [
+        {
+          metric: 'Camera Uptime',
+          value: `${Math.max(0, 100 - (recentCameraErrors.length * 5))}%`,
+          status: recentCameraErrors.length > 5 ? 'warning' : 'good'
+        },
+        {
+          metric: 'Error Rate',
+          value: `${recentCameraErrors.length}/hour`,
+          status: recentCameraErrors.length > 3 ? 'warning' : 'good'
+        }
+      ],
       generated_at: new Date().toISOString()
     }
   });

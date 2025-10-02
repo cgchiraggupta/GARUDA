@@ -96,12 +96,31 @@ const Dashboard: React.FC = () => {
           loading={loading.dashboard}
         />
         <MetricCard
-          title="Critical Alerts"
-          value={dashboardStats?.system?.critical_alerts || 0}
+          title="Total Defects"
+          value={dashboardStats?.system?.total_defects || 0}
           icon={AlertTriangle}
           color="red"
           loading={loading.dashboard}
+          subtitle={`${dashboardStats?.system?.critical_defects || 0} critical`}
         />
+        <MetricCard
+          title="Camera Errors"
+          value={dashboardStats?.system?.camera_errors || 0}
+          icon={AlertTriangle}
+          color="orange"
+          loading={loading.dashboard}
+          subtitle={`${dashboardStats?.system?.recent_camera_errors || 0} recent`}
+        />
+        <MetricCard
+          title="Active Alerts"
+          value={dashboardStats?.system?.active_alerts || 0}
+          icon={AlertTriangle}
+          color="yellow"
+          loading={loading.dashboard}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Track Length"
           value={`${dashboardStats?.system?.total_track_length || 0} km`}
@@ -114,6 +133,20 @@ const Dashboard: React.FC = () => {
           value={dashboardStats?.system?.total_routes || 0}
           icon={Activity}
           color="purple"
+          loading={loading.dashboard}
+        />
+        <MetricCard
+          title="Scheduled Maintenance"
+          value={dashboardStats?.system?.scheduled_maintenance || 0}
+          icon={Clock}
+          color="indigo"
+          loading={loading.dashboard}
+        />
+        <MetricCard
+          title="System Health"
+          value={dashboardStats?.system?.camera_errors > 0 ? "Degraded" : "Good"}
+          icon={dashboardStats?.system?.camera_errors > 0 ? AlertTriangle : Activity}
+          color={dashboardStats?.system?.camera_errors > 0 ? "red" : "green"}
           loading={loading.dashboard}
         />
       </div>

@@ -14,6 +14,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { useData } from '../contexts/DataContext.tsx';
+import { detectCracksInFrame, CrackDetection } from '../utils/crackDetection.ts';
 
 const CameraView: React.FC = () => {
   const { selectedRoute, trains } = useData();
@@ -61,12 +62,168 @@ const CameraView: React.FC = () => {
     }
   }, [trains]);
 
-  // Mock crack detection data
-  const [crackDetections, setCrackDetections] = useState([
-    { id: 1, x: 150, y: 200, width: 80, height: 20, confidence: 0.92, severity: 'high' },
-    { id: 2, x: 300, y: 150, width: 60, height: 15, confidence: 0.87, severity: 'medium' },
-    { id: 3, x: 500, y: 300, width: 40, height: 10, confidence: 0.78, severity: 'low' }
-  ]);
+  // Real crack detection data
+  const [crackDetections, setCrackDetections] = useState<CrackDetection[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [lastDetectionTime, setLastDetectionTime] = useState<number>(0);
+
+  // Camera error handling and analytics
+  const [cameraErrors, setCameraErrors] = useState<{
+    hasError: boolean;
+    errorType: 'permission' | 'device' | 'connection' | 'processing' | 'none';
+    errorMessage: string;
+    errorCount: number;
+    lastErrorTime: string | null;
+  }>({
+    hasError: false,
+    errorType: 'none',
+    errorMessage: '',
+    errorCount: 0,
+    lastErrorTime: null
+  });
+
+  const [systemHealth, setSystemHealth] = useState({
+    cameraStatus: 'active',
+    detectionStatus: 'active',
+    gpsStatus: 'connected',
+    storageStatus: 'normal',
+    networkStatus: 'connected'
+  });
+
+  // Function to send camera errors to backend
+  const reportCameraError = useCallback(async (errorType: string, message: string) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/camera-errors', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          error_type: errorType,
+          message: message,
+          route_id: selectedRoute?.id || 1,
+          chainage_km: overlayData.chainage,
+          latitude: overlayData.latitude,
+          longitude: overlayData.longitude,
+          severity: errorType === 'permission' ? 'high' : errorType === 'device' ? 'critical' : 'medium'
+        })
+      });
+      
+      if (response.ok) {
+        console.log('Camera error reported to backend');
+      }
+    } catch (error) {
+      console.error('Failed to report camera error:', error);
+    }
+  }, [selectedRoute, overlayData]);
+
+  // Function to report crack detection to backend with GPS coordinates
+  const reportCrackDetection = useCallback(async (detections: CrackDetection[]) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/defects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          route_id: selectedRoute?.id || 1,
+          chainage_km: overlayData.chainage,
+          latitude: overlayData.latitude,
+          longitude: overlayData.longitude,
+          detections: detections.map(detection => ({
+            defect_type: detection.type,
+            severity: detection.severity,
+            confidence_score: detection.confidence,
+            description: `${detection.type} crack detected at ${detection.x},${detection.y}`,
+            repair_priority: detection.severity === 'critical' ? 1 : detection.severity === 'high' ? 2 : 3,
+            estimated_repair_cost: detection.severity === 'critical' ? 200000 : detection.severity === 'high' ? 150000 : 100000
+          }))
+        })
+      });
+      
+      if (response.ok) {
+        console.log('Crack detection reported to backend with GPS:', overlayData.latitude, overlayData.longitude);
+      }
+    } catch (error) {
+      console.error('Failed to report crack detection:', error);
+    }
+  }, [selectedRoute, overlayData]);
+
+  // Error handling functions
+  const handleCameraError = useCallback((errorType: 'permission' | 'device' | 'connection' | 'processing', message: string) => {
+    setCameraErrors(prev => ({
+      hasError: true,
+      errorType,
+      errorMessage: message,
+      errorCount: prev.errorCount + 1,
+      lastErrorTime: new Date().toISOString()
+    }));
+
+    // Update system health
+    setSystemHealth(prev => ({
+      ...prev,
+      cameraStatus: 'error',
+      detectionStatus: 'paused'
+    }));
+
+    // Report error to backend for analytics
+    reportCameraError(errorType, message);
+    
+    console.error(`Camera Error [${errorType}]:`, message);
+  }, [reportCameraError]);
+
+  const clearCameraError = useCallback(() => {
+    setCameraErrors(prev => ({
+      ...prev,
+      hasError: false,
+      errorType: 'none',
+      errorMessage: ''
+    }));
+
+    setSystemHealth(prev => ({
+      ...prev,
+      cameraStatus: 'active',
+      detectionStatus: 'active'
+    }));
+  }, []);
+
+  // Real-time crack detection function with error handling
+  const performCrackDetection = useCallback(async () => {
+    if (!webcamRef.current || isProcessing) return;
+    
+    try {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) {
+        handleCameraError('device', 'Unable to capture image from camera');
+        return;
+      }
+      
+      setIsProcessing(true);
+      
+      const result = await detectCracksInFrame(imageSrc, cameraSettings.width, cameraSettings.height);
+      setCrackDetections(result.detections);
+      setLastDetectionTime(result.processingTime);
+      
+      // Clear any previous processing errors
+      if (cameraErrors.errorType === 'processing') {
+        clearCameraError();
+      }
+      
+      // Log detection results for debugging
+      if (result.detections.length > 0) {
+        console.log(`Detected ${result.detections.length} cracks:`, result.detections);
+        console.log(`GPS Location: ${overlayData.latitude}, ${overlayData.longitude}`);
+        
+        // Report crack detection to backend with GPS coordinates
+        reportCrackDetection(result.detections);
+      }
+    } catch (error) {
+      console.error('Crack detection error:', error);
+      handleCameraError('processing', `Detection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [cameraSettings.width, cameraSettings.height, isProcessing, handleCameraError, clearCameraError, cameraErrors.errorType]);
 
   // Post-processing to reduce gaps: dilate and merge nearby boxes
   type CrackDet = { id: number; x: number; y: number; width: number; height: number; confidence: number; severity: 'low' | 'medium' | 'high' | 'critical' };
@@ -126,9 +283,52 @@ const CameraView: React.FC = () => {
     }
   }, [webcamRef]);
 
+  // Camera error detection
+  useEffect(() => {
+    const checkCameraAvailability = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        if (videoDevices.length === 0) {
+          handleCameraError('device', 'No camera devices found');
+          return;
+        }
+
+        // Test camera access
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(track => track.stop());
+        
+        // Camera is working, clear any previous errors
+        if (cameraErrors.hasError) {
+          clearCameraError();
+        }
+      } catch (error) {
+        if (error instanceof Error) {
+          if (error.name === 'NotAllowedError') {
+            handleCameraError('permission', 'Camera permission denied');
+          } else if (error.name === 'NotFoundError') {
+            handleCameraError('device', 'Camera device not found');
+          } else {
+            handleCameraError('connection', `Camera connection failed: ${error.message}`);
+          }
+        }
+      }
+    };
+
+    checkCameraAvailability();
+    const interval = setInterval(checkCameraAvailability, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [handleCameraError, clearCameraError, cameraErrors.hasError]);
+
   // Continuously update GPS using browser geolocation API
   useEffect(() => {
-    if (!('geolocation' in navigator)) return;
+    if (!('geolocation' in navigator)) {
+      setSystemHealth(prev => ({ ...prev, gpsStatus: 'error' }));
+      return;
+    }
+    
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setOverlayData((prev) => ({
@@ -137,22 +337,39 @@ const CameraView: React.FC = () => {
           longitude: pos.coords.longitude,
           timestamp: new Date().toISOString(),
         }));
+        setSystemHealth(prev => ({ ...prev, gpsStatus: 'connected' }));
       },
-      (err) => console.warn('Geolocation error:', err),
+      (err) => {
+        console.warn('Geolocation error:', err);
+        setSystemHealth(prev => ({ ...prev, gpsStatus: 'error' }));
+      },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // Auto-capture frames and geotag whenever cracks are detected
+  // Auto-capture frames and perform real crack detection
   useEffect(() => {
     let interval: number | undefined;
     if (isDetecting) {
       interval = window.setInterval(() => {
+        performCrackDetection();
+      }, 2000); // Run detection every 2 seconds
+    }
+    return () => {
+      if (interval) window.clearInterval(interval);
+    };
+  }, [isDetecting, performCrackDetection]);
+
+  // Auto-capture frames and geotag whenever cracks are detected
+  useEffect(() => {
+    let interval: number | undefined;
+    if (isDetecting && crackDetections.length > 0) {
+      interval = window.setInterval(() => {
         const imageSrc = webcamRef.current?.getScreenshot();
         if (!imageSrc) return;
-        // Use processedDetections as current detection result (placeholder for real model)
-        const count = processedDetections.length;
+        
+        const count = crackDetections.length;
         if (count > 0) {
           const evt: DetectionEvent = {
             id: `${Date.now()}`,
@@ -164,12 +381,12 @@ const CameraView: React.FC = () => {
           };
           setDetectionEvents((prev) => [evt, ...prev].slice(0, 50));
         }
-      }, 1000); // capture every second without stopping camera
+      }, 1000); // capture every second when cracks are detected
     }
     return () => {
       if (interval) window.clearInterval(interval);
     };
-  }, [isDetecting, processedDetections, overlayData.latitude, overlayData.longitude]);
+  }, [isDetecting, crackDetections.length, overlayData.latitude, overlayData.longitude]);
 
   const startRecording = () => {
     setIsRecording(true);
@@ -240,6 +457,53 @@ const CameraView: React.FC = () => {
             >
               {isDetecting ? 'Pause Detection' : 'Start Detection'}
             </button>
+            <button
+              onClick={performCrackDetection}
+              disabled={isProcessing || cameraErrors.hasError}
+              className="btn btn-primary"
+            >
+              {isProcessing ? 'Processing...' : 'Detect Now'}
+            </button>
+            <button
+              onClick={() => {
+                // Simulate crack detection for demo
+                const mockCracks: CrackDetection[] = [
+                  {
+                    id: 1,
+                    x: 150,
+                    y: 200,
+                    width: 80,
+                    height: 20,
+                    confidence: 0.92,
+                    severity: 'high',
+                    type: 'longitudinal'
+                  },
+                  {
+                    id: 2,
+                    x: 300,
+                    y: 150,
+                    width: 60,
+                    height: 15,
+                    confidence: 0.87,
+                    severity: 'medium',
+                    type: 'transverse'
+                  }
+                ];
+                setCrackDetections(mockCracks);
+                console.log('Demo: Simulated crack detection at:', overlayData.latitude, overlayData.longitude);
+              }}
+              className="btn btn-secondary"
+            >
+              Demo Cracks
+            </button>
+            {cameraErrors.hasError && (
+              <button
+                onClick={clearCameraError}
+                className="btn btn-secondary"
+              >
+                Retry Camera
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -249,6 +513,28 @@ const CameraView: React.FC = () => {
         {/* Camera View */}
         <div className="flex-1 relative">
           <div className="relative w-full h-full bg-black">
+            {cameraErrors.hasError ? (
+              <div className="w-full h-full flex items-center justify-center bg-red-900/20">
+                <div className="text-center text-white p-8">
+                  <AlertTriangle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">Camera Error</h3>
+                  <p className="text-red-200 mb-4">{cameraErrors.errorMessage}</p>
+                  <div className="text-sm text-gray-300 mb-4">
+                    <p>Error Type: {cameraErrors.errorType}</p>
+                    <p>Error Count: {cameraErrors.errorCount}</p>
+                    {cameraErrors.lastErrorTime && (
+                      <p>Last Error: {new Date(cameraErrors.lastErrorTime).toLocaleTimeString()}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={clearCameraError}
+                    className="btn btn-primary"
+                  >
+                    Retry Camera
+                  </button>
+                </div>
+              </div>
+            ) : (
             <Webcam
               ref={webcamRef}
               audio={false}
@@ -257,7 +543,12 @@ const CameraView: React.FC = () => {
               screenshotFormat="image/jpeg"
               videoConstraints={videoConstraints}
               className="w-full h-full object-cover"
+                onUserMediaError={(error) => {
+                  console.error('Webcam error:', error);
+                  handleCameraError('connection', `Camera stream error: ${error.message || 'Unknown error'}`);
+                }}
             />
+            )}
 
             {/* GPS Overlay */}
             <div className="absolute top-4 left-4 bg-black/70 text-white p-3 rounded-lg backdrop-blur-sm">
@@ -309,18 +600,27 @@ const CameraView: React.FC = () => {
             {/* Detection Status */}
             <div className="absolute bottom-4 left-4 bg-black/70 text-white p-3 rounded-lg backdrop-blur-sm">
               <div className="flex items-center space-x-2">
-                {isDetecting ? (
+                {isProcessing ? (
+                  <div className="h-5 w-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                ) : isDetecting ? (
                   <CheckCircle className="h-5 w-5 text-green-400" />
                 ) : (
                   <AlertTriangle className="h-5 w-5 text-yellow-400" />
                 )}
                 <span className="text-sm">
-                  {isDetecting 
+                  {isProcessing 
+                    ? 'Processing frame...' 
+                    : isDetecting 
                     ? `${crackDetections.length} defects detected` 
                     : 'Detection paused'
                   }
                 </span>
               </div>
+              {lastDetectionTime > 0 && (
+                <div className="text-xs text-gray-300 mt-1">
+                  Last detection: {lastDetectionTime.toFixed(0)}ms
+                </div>
+              )}
             </div>
           </div>
 
@@ -386,6 +686,7 @@ const CameraView: React.FC = () => {
                   </div>
                   <div className="text-xs text-gray-600">
                     <div>Confidence: {Math.round(detection.confidence * 100)}%</div>
+                    <div>Type: {detection.type}</div>
                     <div>Position: ({detection.x}, {detection.y})</div>
                     <div>Size: {detection.width}×{detection.height}px</div>
                   </div>
@@ -460,16 +761,28 @@ const CameraView: React.FC = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Camera</span>
-                <span className="text-sm font-medium text-green-600">Active</span>
+                <span className={`text-sm font-medium ${
+                  cameraErrors.hasError ? 'text-red-600' : 
+                  systemHealth.cameraStatus === 'active' ? 'text-green-600' : 'text-yellow-600'
+                }`}>
+                  {cameraErrors.hasError ? 'Error' : systemHealth.cameraStatus}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">GPS</span>
-                <span className="text-sm font-medium text-green-600">Connected</span>
+                <span className={`text-sm font-medium ${
+                  systemHealth.gpsStatus === 'connected' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {systemHealth.gpsStatus}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">AI Detection</span>
-                <span className={`text-sm font-medium ${isDetecting ? 'text-green-600' : 'text-yellow-600'}`}>
-                  {isDetecting ? 'Active' : 'Paused'}
+                <span className={`text-sm font-medium ${
+                  cameraErrors.hasError ? 'text-red-600' :
+                  isDetecting ? 'text-green-600' : 'text-yellow-600'
+                }`}>
+                  {cameraErrors.hasError ? 'Error' : isDetecting ? 'Active' : 'Paused'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -480,8 +793,26 @@ const CameraView: React.FC = () => {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Storage</span>
-                <span className="text-sm font-medium text-green-600">2.3GB / 64GB</span>
+                <span className={`text-sm font-medium ${
+                  systemHealth.storageStatus === 'normal' ? 'text-green-600' : 'text-yellow-600'
+                }`}>
+                  {systemHealth.storageStatus}
+                </span>
               </div>
+              {cameraErrors.hasError && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="text-sm text-red-800">
+                    <div className="font-medium">Error Details:</div>
+                    <div className="mt-1">
+                      <div>Type: {cameraErrors.errorType}</div>
+                      <div>Count: {cameraErrors.errorCount}</div>
+                      {cameraErrors.lastErrorTime && (
+                        <div>Time: {new Date(cameraErrors.lastErrorTime).toLocaleTimeString()}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

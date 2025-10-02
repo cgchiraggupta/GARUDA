@@ -5,7 +5,7 @@ interface MetricCardProps {
   title: string;
   value: string | number;
   icon: LucideIcon;
-  color: 'blue' | 'green' | 'red' | 'yellow' | 'purple' | 'gray';
+  color: 'blue' | 'green' | 'red' | 'yellow' | 'purple' | 'gray' | 'orange' | 'indigo';
   subtitle?: string;
   loading?: boolean;
   trend?: {
@@ -60,6 +60,18 @@ const MetricCard: React.FC<MetricCardProps> = ({
           bg: 'bg-gray-50',
           icon: 'text-gray-600',
           border: 'border-gray-200'
+        };
+      case 'orange':
+        return {
+          bg: 'bg-orange-50',
+          icon: 'text-orange-600',
+          border: 'border-orange-200'
+        };
+      case 'indigo':
+        return {
+          bg: 'bg-indigo-50',
+          icon: 'text-indigo-600',
+          border: 'border-indigo-200'
         };
       default:
         return {

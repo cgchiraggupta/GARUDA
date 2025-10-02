@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, AlertTriangle, Wrench, Train } from 'lucide-react';
+import { Activity, AlertTriangle, Wrench, Train, Camera } from 'lucide-react';
 import { useData } from '../../contexts/DataContext.tsx';
 
 const RecentActivity: React.FC = () => {
@@ -8,6 +8,9 @@ const RecentActivity: React.FC = () => {
   const getActivityIcon = (type: string, subtype: string) => {
     if (type === 'defect') {
       return <AlertTriangle className="h-4 w-4 text-red-500" />;
+    }
+    if (type === 'camera_error') {
+      return <Camera className="h-4 w-4 text-orange-500" />;
     }
     if (type === 'alert') {
       switch (subtype) {

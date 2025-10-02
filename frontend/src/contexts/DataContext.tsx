@@ -67,6 +67,24 @@ interface SensorReading {
   timestamp: string;
 }
 
+interface DashboardStats {
+  system: {
+    active_trains: number;
+    total_defects: number;
+    critical_alerts: number;
+    total_track_length: number;
+    total_routes: number;
+    camera_errors: number;
+    recent_camera_errors: number;
+  };
+  route?: {
+    avg_gauge: number;
+    avg_alignment_deviation: number;
+    max_current_speed: number;
+    active_defects: number;
+  };
+}
+
 interface DataContextType {
   routes: Route[];
   selectedRoute: Route | null;
@@ -74,10 +92,12 @@ interface DataContextType {
   defects: Defect[];
   alerts: Alert[];
   sensorReadings: SensorReading[];
+  dashboardStats: DashboardStats | null;
   loading: boolean;
   error: string | null;
   selectRoute: (route: Route) => void;
   refreshData: () => Promise<void>;
+  refreshDashboardStats: (routeId?: number) => Promise<void>;
   getRouteLiveData: (routeId: number) => Promise<any>;
 }
 
@@ -102,6 +122,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [defects, setDefects] = useState<Defect[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [sensorReadings, setSensorReadings] = useState<SensorReading[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -143,6 +164,24 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     } catch (err) {
       console.error('Error loading route data:', err);
       setError('Failed to load route data');
+    }
+  }, []);
+
+  const refreshDashboardStats = useCallback(async (routeId?: number) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/analytics/dashboard');
+      const data = await response.json();
+      
+      if (data.success) {
+        // Transform the backend data to match frontend expectations
+        const transformedData = {
+          system: data.data.system_stats,
+          route: data.data.route_stats
+        };
+        setDashboardStats(transformedData);
+      }
+    } catch (err) {
+      console.error('Error loading dashboard stats:', err);
     }
   }, []);
 
@@ -226,17 +265,25 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setAlerts(prev => [alertData, ...prev]);
     };
 
+    const handleCameraErrorUpdate = (event: CustomEvent) => {
+      const errorData = event.detail;
+      // Refresh dashboard stats when camera errors occur
+      refreshDashboardStats();
+    };
+
     // Subscribe to WebSocket topics
     subscribe('train-tracking');
     subscribe('sensor-data');
     subscribe('defect-detection');
     subscribe('alerts');
+    subscribe('camera-error');
 
     // Add event listeners
     window.addEventListener('ws-train-tracking', handleTrainUpdate as EventListener);
     window.addEventListener('ws-sensor-data', handleSensorUpdate as EventListener);
     window.addEventListener('ws-defect-detection', handleDefectUpdate as EventListener);
     window.addEventListener('ws-alerts', handleAlertUpdate as EventListener);
+    window.addEventListener('ws-camera-error', handleCameraErrorUpdate as EventListener);
 
     return () => {
       // Unsubscribe from topics
@@ -244,19 +291,22 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       unsubscribe('sensor-data');
       unsubscribe('defect-detection');
       unsubscribe('alerts');
+      unsubscribe('camera-error');
 
       // Remove event listeners
       window.removeEventListener('ws-train-tracking', handleTrainUpdate as EventListener);
       window.removeEventListener('ws-sensor-data', handleSensorUpdate as EventListener);
       window.removeEventListener('ws-defect-detection', handleDefectUpdate as EventListener);
       window.removeEventListener('ws-alerts', handleAlertUpdate as EventListener);
+      window.removeEventListener('ws-camera-error', handleCameraErrorUpdate as EventListener);
     };
   }, [subscribe, unsubscribe]);
 
   // Load initial data
   useEffect(() => {
     loadInitialData();
-  }, [loadInitialData]);
+    refreshDashboardStats();
+  }, [loadInitialData, refreshDashboardStats]);
 
   // Auto-load data whenever selectedRoute becomes available or changes
   useEffect(() => {
@@ -265,6 +315,15 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     }
   }, [selectedRoute, loadRouteData]);
 
+  // Auto-refresh dashboard stats every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshDashboardStats();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [refreshDashboardStats]);
+
   const value: DataContextType = {
     routes,
     selectedRoute,
@@ -272,10 +331,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     defects,
     alerts,
     sensorReadings,
+    dashboardStats,
     loading,
     error,
     selectRoute,
     refreshData,
+    refreshDashboardStats,
     getRouteLiveData,
   };
 
